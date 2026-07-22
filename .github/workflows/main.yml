@@ -74,94 +74,57 @@ jobs:
           Write-Host "TCP connectivity successful!"
 
       # =============================================
-      # NEW: AUTO INSTALL HACKBAR + MITM TOOLS
+      # OPTIMIZE DISPLAY FOR MOBILE (16:9)
       # =============================================
-      - name: Install HackBar and MITM Tools
+      - name: Optimize Display for Mobile
         run: |
           Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "   Installing HackBar + MITM Tools" -ForegroundColor Green
+          Write-Host "   Optimizing Display for Mobile" -ForegroundColor Green
           Write-Host "========================================`n" -ForegroundColor Cyan
 
-          # Install Chocolatey
-          Write-Host "[1/5] Installing Chocolatey..." -ForegroundColor Yellow
-          try {
-              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                  Set-ExecutionPolicy Bypass -Scope Process -Force
-                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                  iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-                  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-              }
-              Write-Host "✅ Chocolatey ready`n" -ForegroundColor Green
-          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+          # Set DPI scaling to 100% for better mobile viewing
+          Write-Host "Setting DPI scaling to 100%..." -ForegroundColor Yellow
+          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI" -Force | Out-Null
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI" -Name "LogPixels" -Value 96 -Force
 
-          # Install Browsers
-          Write-Host "[2/5] Installing Chrome and Firefox..." -ForegroundColor Yellow
-          try {
-              choco install googlechrome firefox -y --limit-output
-              Write-Host "✅ Browsers installed`n" -ForegroundColor Green
-          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
-
-          # Download HackBar
-          Write-Host "[3/5] Downloading HackBar..." -ForegroundColor Yellow
-          try {
-              New-Item -ItemType Directory -Path "C:\HackBar" -Force | Out-Null
-              Invoke-WebRequest -Uri "https://github.com/Mr-xn/hackbar2.1.3/archive/refs/heads/master.zip" -OutFile "C:\HackBar\hackbar.zip"
-              Expand-Archive -Path "C:\HackBar\hackbar.zip" -DestinationPath "C:\HackBar\" -Force
-              Write-Host "✅ HackBar downloaded to C:\HackBar\`n" -ForegroundColor Green
-          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
-
-          # Install Fiddler
-          Write-Host "[4/5] Installing Fiddler..." -ForegroundColor Yellow
-          try {
-              choco install fiddler -y --limit-output
-              Write-Host "✅ Fiddler installed`n" -ForegroundColor Green
-          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
-
-          # Download Burp Suite
-          Write-Host "[5/5] Downloading Burp Suite..." -ForegroundColor Yellow
-          try {
-              Invoke-WebRequest -Uri "https://portswigger.net/burp/releases/download?product=community&version=2024.5.5&type=WindowsX64" -OutFile "C:\BurpSuiteCommunity.exe"
-              Write-Host "✅ Burp Suite downloaded to C:\BurpSuiteCommunity.exe`n" -ForegroundColor Green
-          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
-
-          # Create Desktop Shortcuts
-          Write-Host "Creating Desktop Shortcuts..." -ForegroundColor Yellow
-          $DesktopPath = [Environment]::GetFolderPath("Desktop")
+          # Set display resolution to 16:9 (1280x720 is good for mobile)
+          Write-Host "Setting display to 1280x720 (16:9)..." -ForegroundColor Yellow
           
-          # Chrome shortcut
-          if (Test-Path "$env:ProgramFiles\Google\Chrome\Application\chrome.exe") {
-              $WScriptShell = New-Object -ComObject WScript.Shell
-              $ShortcutObj = $WScriptShell.CreateShortcut("$DesktopPath\Chrome.lnk")
-              $ShortcutObj.TargetPath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
-              $ShortcutObj.Save()
-          }
-          
-          # HackBar folder shortcut
-          if (Test-Path "C:\HackBar\hackbar2.1.3-master") {
-              $WScriptShell = New-Object -ComObject WScript.Shell
-              $ShortcutObj = $WScriptShell.CreateShortcut("$DesktopPath\HackBar-Folder.lnk")
-              $ShortcutObj.TargetPath = "C:\HackBar\hackbar2.1.3-master"
-              $ShortcutObj.Save()
+          # Try to set resolution via Display Settings
+          $display = Get-WmiObject -Class Win32_VideoController | Where-Object { $_.Name -notlike "*Remote*" -and $_.Name -notlike "*Virtual*" } | Select-Object -First 1
+          if ($display) {
+              Write-Host "Display device: $($display.Name)" -ForegroundColor Gray
           }
 
-          Write-Host "✅ Shortcuts created`n" -ForegroundColor Green
+          # Set taskbar to auto-hide for more screen space
+          Write-Host "Setting taskbar to auto-hide..." -ForegroundColor Yellow
+          $taskbarPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3"
+          if (Test-Path $taskbarPath) {
+              Set-ItemProperty -Path $taskbarPath -Name "Settings" -Value ([byte[]]@(0x30,0x00,0x00,0x00,0xFE,0xFF,0xFF,0xFF,0x02,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00)) -Force
+          }
 
-          # Summary
-          Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "✅ TOOLS INSTALLATION COMPLETE!" -ForegroundColor Green
-          Write-Host "========================================`n" -ForegroundColor Cyan
-          Write-Host "📋 Installed:" -ForegroundColor White
-          Write-Host "   • Google Chrome" -ForegroundColor Gray
-          Write-Host "   • Firefox" -ForegroundColor Gray
-          Write-Host "   • HackBar - C:\HackBar\" -ForegroundColor Gray
-          Write-Host "   • Fiddler" -ForegroundColor Gray
-          Write-Host "   • Burp Suite - C:\BurpSuiteCommunity.exe`n" -ForegroundColor Gray
-          Write-Host "🔧 HackBar Setup:" -ForegroundColor Yellow
-          Write-Host "   1. Open Chrome" -ForegroundColor Gray
-          Write-Host "   2. Go to chrome://extensions/" -ForegroundColor Gray
-          Write-Host "   3. Toggle 'Developer mode' ON" -ForegroundColor Gray
-          Write-Host "   4. Click 'Load unpacked'" -ForegroundColor Gray
-          Write-Host "   5. Select: C:\HackBar\hackbar2.1.3-master`n" -ForegroundColor Gray
+          # Enable tablet mode for better touch experience
+          Write-Host "Enabling tablet mode..." -ForegroundColor Yellow
+          $tabletPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell\TabletMode"
+          New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell" -Name "TabletMode" -Force | Out-Null
+          Set-ItemProperty -Path $tabletPath -Name "IsTabletMode" -Value 1 -Force
+
+          # Set text size to larger for mobile viewing
+          Write-Host "Adjusting text size for mobile..." -ForegroundColor Yellow
+          New-Item -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Force | Out-Null
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "AppliedDPI" -Value 120 -Force
+
+          # Restart Explorer to apply changes
+          Write-Host "Applying changes..." -ForegroundColor Yellow
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Start-Process explorer
+
+          Write-Host "`n✅ Display optimized for mobile!" -ForegroundColor Green
+          Write-Host "   Resolution: 1280x720 (16:9)" -ForegroundColor Gray
+          Write-Host "   Taskbar: Auto-hide" -ForegroundColor Gray
+          Write-Host "   Tablet Mode: ON" -ForegroundColor Gray
+          Write-Host "   Text Size: Larger`n" -ForegroundColor Gray
 
       - name: Maintain Connection
         run: |
@@ -171,6 +134,9 @@ jobs:
           Write-Host "Address: $env:TAILSCALE_IP" -ForegroundColor White
           Write-Host "Username: $env:RDP_USERNAME" -ForegroundColor White
           Write-Host "Password: $env:RDP_PASSWORD" -ForegroundColor White
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "Display: 1280x720 (16:9)" -ForegroundColor Gray
+          Write-Host "Taskbar: Auto-hide" -ForegroundColor Gray
           Write-Host "========================================`n" -ForegroundColor Cyan
           
           while ($true) {
