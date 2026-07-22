@@ -11,7 +11,6 @@ jobs:
     steps:
       - name: Configure Core RDP Settings
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication (if needed)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
                              -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
@@ -19,43 +18,23 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
                              -Name "SecurityLayer" -Value 0 -Force
 
-          # Remove any existing rule with the same name to avoid duplication
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          
-          # For testing, allow any incoming connection on port 3389
           netsh advfirewall firewall add rule name="RDP-Tailscale" `
             dir=in action=allow protocol=TCP localport=3389
 
-          # (Optional) Restart the Remote Desktop service to ensure changes take effect
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User with Secure Password
+      - name: Create RDP User with Custom Credentials
         run: |
-          Add-Type -AssemblyName System.Security
-          $charSet = @{
-              Upper   = [char[]](65..90)      # A-Z
-              Lower   = [char[]](97..122)     # a-z
-              Number  = [char[]](48..57)      # 0-9
-              Special = ([char[]](33..47) + [char[]](58..64) +
-                         [char[]](91..96) + [char[]](123..126)) # Special characters
-          }
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          $username = "Mr F4X"
+          $password = "@QasimAli254"
           
+          New-LocalUser -Name "$username" -Password (ConvertTo-SecureString $password -AsPlainText -Force) -AccountNeverExpires -FullName "Mr F4X"
+          Add-LocalGroupMember -Group "Administrators" -Member "$username"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "$username"
+          
+          echo "RDP_USERNAME=$username" >> $env:GITHUB_ENV
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
-          
-          if (-not (Get-LocalUser -Name "RDP")) {
-              Write-Error "User creation failed"
-              exit 1
-          }
 
       - name: Install Tailscale
         run: |
@@ -68,10 +47,8 @@ jobs:
 
       - name: Establish Tailscale Connection
         run: |
-          # Bring up Tailscale with the provided auth key and set a unique hostname
           & "$env:ProgramFiles\Tailscale\Tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
           
-          # Wait for Tailscale to assign an IP
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
@@ -85,12 +62,10 @@ jobs:
               exit 1
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-      
+
       - name: Verify RDP Accessibility
         run: |
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          
-          # Test connectivity using Test-NetConnection against the Tailscale IP on port 3389
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
               Write-Error "TCP connection to RDP port 3389 failed"
@@ -98,15 +73,106 @@ jobs:
           }
           Write-Host "TCP connectivity successful!"
 
+      # =============================================
+      # NEW: AUTO INSTALL HACKBAR + MITM TOOLS
+      # =============================================
+      - name: Install HackBar and MITM Tools
+        run: |
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "   Installing HackBar + MITM Tools" -ForegroundColor Green
+          Write-Host "========================================`n" -ForegroundColor Cyan
+
+          # Install Chocolatey
+          Write-Host "[1/5] Installing Chocolatey..." -ForegroundColor Yellow
+          try {
+              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                  iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+              }
+              Write-Host "✅ Chocolatey ready`n" -ForegroundColor Green
+          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+
+          # Install Browsers
+          Write-Host "[2/5] Installing Chrome and Firefox..." -ForegroundColor Yellow
+          try {
+              choco install googlechrome firefox -y --limit-output
+              Write-Host "✅ Browsers installed`n" -ForegroundColor Green
+          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+
+          # Download HackBar
+          Write-Host "[3/5] Downloading HackBar..." -ForegroundColor Yellow
+          try {
+              New-Item -ItemType Directory -Path "C:\HackBar" -Force | Out-Null
+              Invoke-WebRequest -Uri "https://github.com/Mr-xn/hackbar2.1.3/archive/refs/heads/master.zip" -OutFile "C:\HackBar\hackbar.zip"
+              Expand-Archive -Path "C:\HackBar\hackbar.zip" -DestinationPath "C:\HackBar\" -Force
+              Write-Host "✅ HackBar downloaded to C:\HackBar\`n" -ForegroundColor Green
+          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+
+          # Install Fiddler
+          Write-Host "[4/5] Installing Fiddler..." -ForegroundColor Yellow
+          try {
+              choco install fiddler -y --limit-output
+              Write-Host "✅ Fiddler installed`n" -ForegroundColor Green
+          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+
+          # Download Burp Suite
+          Write-Host "[5/5] Downloading Burp Suite..." -ForegroundColor Yellow
+          try {
+              Invoke-WebRequest -Uri "https://portswigger.net/burp/releases/download?product=community&version=2024.5.5&type=WindowsX64" -OutFile "C:\BurpSuiteCommunity.exe"
+              Write-Host "✅ Burp Suite downloaded to C:\BurpSuiteCommunity.exe`n" -ForegroundColor Green
+          } catch { Write-Host "❌ Failed: $_`n" -ForegroundColor Red }
+
+          # Create Desktop Shortcuts
+          Write-Host "Creating Desktop Shortcuts..." -ForegroundColor Yellow
+          $DesktopPath = [Environment]::GetFolderPath("Desktop")
+          
+          # Chrome shortcut
+          if (Test-Path "$env:ProgramFiles\Google\Chrome\Application\chrome.exe") {
+              $WScriptShell = New-Object -ComObject WScript.Shell
+              $ShortcutObj = $WScriptShell.CreateShortcut("$DesktopPath\Chrome.lnk")
+              $ShortcutObj.TargetPath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+              $ShortcutObj.Save()
+          }
+          
+          # HackBar folder shortcut
+          if (Test-Path "C:\HackBar\hackbar2.1.3-master") {
+              $WScriptShell = New-Object -ComObject WScript.Shell
+              $ShortcutObj = $WScriptShell.CreateShortcut("$DesktopPath\HackBar-Folder.lnk")
+              $ShortcutObj.TargetPath = "C:\HackBar\hackbar2.1.3-master"
+              $ShortcutObj.Save()
+          }
+
+          Write-Host "✅ Shortcuts created`n" -ForegroundColor Green
+
+          # Summary
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "✅ TOOLS INSTALLATION COMPLETE!" -ForegroundColor Green
+          Write-Host "========================================`n" -ForegroundColor Cyan
+          Write-Host "📋 Installed:" -ForegroundColor White
+          Write-Host "   • Google Chrome" -ForegroundColor Gray
+          Write-Host "   • Firefox" -ForegroundColor Gray
+          Write-Host "   • HackBar - C:\HackBar\" -ForegroundColor Gray
+          Write-Host "   • Fiddler" -ForegroundColor Gray
+          Write-Host "   • Burp Suite - C:\BurpSuiteCommunity.exe`n" -ForegroundColor Gray
+          Write-Host "🔧 HackBar Setup:" -ForegroundColor Yellow
+          Write-Host "   1. Open Chrome" -ForegroundColor Gray
+          Write-Host "   2. Go to chrome://extensions/" -ForegroundColor Gray
+          Write-Host "   3. Toggle 'Developer mode' ON" -ForegroundColor Gray
+          Write-Host "   4. Click 'Load unpacked'" -ForegroundColor Gray
+          Write-Host "   5. Select: C:\HackBar\hackbar2.1.3-master`n" -ForegroundColor Gray
+
       - name: Maintain Connection
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
-          Write-Host "Address: $env:TAILSCALE_IP"
-          Write-Host "Username: RDP"
-          Write-Host "Password: $env:RDP_PASSWORD"
-          Write-Host "==================`n"
+          Write-Host "`n========================================" -ForegroundColor Cyan
+          Write-Host "✅ RDP READY!" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "Address: $env:TAILSCALE_IP" -ForegroundColor White
+          Write-Host "Username: $env:RDP_USERNAME" -ForegroundColor White
+          Write-Host "Password: $env:RDP_PASSWORD" -ForegroundColor White
+          Write-Host "========================================`n" -ForegroundColor Cyan
           
-          # Keep runner active indefinitely (or until manually cancelled)
           while ($true) {
               Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
               Start-Sleep -Seconds 300
