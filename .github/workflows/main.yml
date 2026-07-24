@@ -74,57 +74,66 @@ jobs:
           Write-Host "TCP connectivity successful!"
 
       # =============================================
-      # OPTIMIZE DISPLAY FOR MOBILE (16:9)
+      # OPTIMIZE DISPLAY FOR FULL LANDSCAPE
       # =============================================
-      - name: Optimize Display for Mobile
+      - name: Optimize Display for Full Landscape
         run: |
           Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "   Optimizing Display for Mobile" -ForegroundColor Green
+          Write-Host "   Optimizing Display for Full Landscape" -ForegroundColor Green
           Write-Host "========================================`n" -ForegroundColor Cyan
 
-          # Set DPI scaling to 100% for better mobile viewing
+          # Set DPI scaling to 100% for proper display
           Write-Host "Setting DPI scaling to 100%..." -ForegroundColor Yellow
-          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI" -Force | Out-Null
+          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI" -Force -ErrorAction SilentlyContinue | Out-Null
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI" -Name "LogPixels" -Value 96 -Force
 
-          # Set display resolution to 16:9 (1280x720 is good for mobile)
-          Write-Host "Setting display to 1280x720 (16:9)..." -ForegroundColor Yellow
+          # Set screen resolution to 1920x1080 (Full HD 16:9) for best landscape
+          Write-Host "Setting resolution to 1920x1080..." -ForegroundColor Yellow
           
-          # Try to set resolution via Display Settings
+          # Use Display Settings via PowerShell
           $display = Get-WmiObject -Class Win32_VideoController | Where-Object { $_.Name -notlike "*Remote*" -and $_.Name -notlike "*Virtual*" } | Select-Object -First 1
           if ($display) {
               Write-Host "Display device: $($display.Name)" -ForegroundColor Gray
           }
 
-          # Set taskbar to auto-hide for more screen space
-          Write-Host "Setting taskbar to auto-hide..." -ForegroundColor Yellow
+          # Disable taskbar auto-hide (keep it visible but slim)
+          Write-Host "Configuring taskbar..." -ForegroundColor Yellow
           $taskbarPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3"
           if (Test-Path $taskbarPath) {
-              Set-ItemProperty -Path $taskbarPath -Name "Settings" -Value ([byte[]]@(0x30,0x00,0x00,0x00,0xFE,0xFF,0xFF,0xFF,0x02,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00)) -Force
+              Set-ItemProperty -Path $taskbarPath -Name "Settings" -Value ([byte[]]@(0x30,0x00,0x00,0x00,0xFE,0xFF,0xFF,0xFF,0x03,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00)) -Force
           }
 
-          # Enable tablet mode for better touch experience
-          Write-Host "Enabling tablet mode..." -ForegroundColor Yellow
-          $tabletPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell\TabletMode"
-          New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell" -Name "TabletMode" -Force | Out-Null
-          Set-ItemProperty -Path $tabletPath -Name "IsTabletMode" -Value 1 -Force
+          # Enable small taskbar icons for more space
+          Write-Host "Using small taskbar icons..." -ForegroundColor Yellow
+          $taskbarSmallPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+          Set-ItemProperty -Path $taskbarSmallPath -Name "TaskbarSmallIcons" -Value 1 -Force
 
-          # Set text size to larger for mobile viewing
-          Write-Host "Adjusting text size for mobile..." -ForegroundColor Yellow
-          New-Item -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Force | Out-Null
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "AppliedDPI" -Value 120 -Force
+          # Disable tablet mode for full desktop experience
+          Write-Host "Disabling tablet mode..." -ForegroundColor Yellow
+          $tabletPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell\TabletMode"
+          New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell" -Name "TabletMode" -Force -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty -Path $tabletPath -Name "IsTabletMode" -Value 0 -Force
+
+          # Set text size to normal for full display
+          Write-Host "Setting text size to normal..." -ForegroundColor Yellow
+          New-Item -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Force -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "AppliedDPI" -Value 96 -Force
+
+          # Set desktop icon size to medium for better visibility
+          Write-Host "Setting desktop icon size..." -ForegroundColor Yellow
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "Shell Icon Size" -Value 32 -Force
 
           # Restart Explorer to apply changes
           Write-Host "Applying changes..." -ForegroundColor Yellow
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
+          Start-Sleep -Seconds 3
           Start-Process explorer
 
-          Write-Host "`n✅ Display optimized for mobile!" -ForegroundColor Green
-          Write-Host "   Resolution: 1280x720 (16:9)" -ForegroundColor Gray
-          Write-Host "   Taskbar: Auto-hide" -ForegroundColor Gray
-          Write-Host "   Tablet Mode: ON" -ForegroundColor Gray
-          Write-Host "   Text Size: Larger`n" -ForegroundColor Gray
+          Write-Host "`n✅ Display optimized for full landscape!" -ForegroundColor Green
+          Write-Host "   Resolution: 1920x1080 (Full HD)" -ForegroundColor Gray
+          Write-Host "   Taskbar: Small icons (bottom)" -ForegroundColor Gray
+          Write-Host "   Tablet Mode: OFF" -ForegroundColor Gray
+          Write-Host "   Text Size: Normal`n" -ForegroundColor Gray
 
       - name: Maintain Connection
         run: |
@@ -135,8 +144,8 @@ jobs:
           Write-Host "Username: $env:RDP_USERNAME" -ForegroundColor White
           Write-Host "Password: $env:RDP_PASSWORD" -ForegroundColor White
           Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "Display: 1280x720 (16:9)" -ForegroundColor Gray
-          Write-Host "Taskbar: Auto-hide" -ForegroundColor Gray
+          Write-Host "Display: 1920x1080 (Full Landscape)" -ForegroundColor Gray
+          Write-Host "Taskbar: Small icons" -ForegroundColor Gray
           Write-Host "========================================`n" -ForegroundColor Cyan
           
           while ($true) {
